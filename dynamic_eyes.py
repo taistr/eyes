@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import pygame as pg
+import random
 from enum import Enum
 
 class State(Enum):
@@ -13,12 +14,25 @@ def glassy_blur(pg_surface):
     np_blurred = cv2.GaussianBlur(np_image, ksize=(15, 15), sigmaX=20, sigmaY=20)
     return pg.surfarray.make_surface(np_blurred)
 
+# def led_striped(pg_surface):
+#     np_image = pg.surfarray.array3d(pg_surface)
+
+#     height, width, _ = np_image.shape
+#     stripe_color = (0, 0, 0)  # BGR color of the stripe (blue in this example)
+#     stripe_height = 20  # Height of the stripe in pixels
+#     stripe_image = np.zeros((height, width, 3), dtype=np.uint8)
+#     stripe_image[::stripe_height, :] = stripe_color
+#     np_striped = cv2.addWeighted(np_image, 1, stripe_image, 0.5, 0)
+    
+#     return pg.surfarray.make_surface(np_striped)
+
 class Eye(pg.sprite.Sprite):
     def __init__(self, centre, iris_color, iris_radius, pupil_color=None, pupil_radius = None, left_eye:bool = None, velocity=None):
         #Call the Sprite constructor
         super().__init__()
 
         self.state = State.IDLE
+        self.initial_position = centre
 
         #centre for initial position -> use move and Rect afterwards
         self.iris_color = iris_color
@@ -26,7 +40,13 @@ class Eye(pg.sprite.Sprite):
         self.pupil_color = pupil_color
         self.pupil_radius = pupil_radius
 
-        self.vel = velocity
+        self.idle_velocity = 1
+        self._idle_incr = 0
+        self._idle_up_flag = True
+        self._idle_max_position = 20
+
+        self.movement_velocity = velocity
+
         self.left_eye = left_eye #0-> right, 1 -> left
 
         #Initialise the iris
@@ -40,15 +60,36 @@ class Eye(pg.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.move_ip(centre[0]-iris_radius, centre[1]-iris_radius)
 
+    def update(self): #On each iteration update the eye's current state - when added to a pygame group, it can be invoked via group.update() -> for both eyes
+        if self.state == State.IDLE:
+            self.bob()
+        elif self.state == State.ACTIVE:
+            #run an iteration of whatever expression is active
+            pass 
+        elif self.state == State.FINISHED:
+            #clean or finish anything up and transition to idle
+            pass
+
     def move(self, up=False, down=False, left=False, right=False):
         if right:
-            self.rect.move_ip(self.vel, 0)
+            self.rect.move_ip(self.movement_velocity, 0)
         if left:
-            self.rect.move_ip(-self.vel, 0)
+            self.rect.move_ip(-self.movement_velocity, 0)
         if down:
-            self.rect.move_ip(0, self.vel)
+            self.rect.move_ip(0, self.movement_velocity)
         if up:
-            self.rect.move_ip(0, -self.vel)
+            self.rect.move_ip(0, -self.movement_velocity)
+
+    def bob(self):
+        if self._idle_up_flag:
+            self.rect.move_ip(0, -self.idle_velocity) #move up
+            self._idle_incr += 1
+        else:
+            self.rect.move_ip(0, self.idle_velocity) #move down
+            self._idle_incr -= 1
+    
+        if abs(self._idle_incr) >= self._idle_max_position:
+            self._idle_up_flag = not(self._idle_up_flag)
 
     def _draw_iris(self):
         self.image.fill(self._white)
@@ -93,7 +134,7 @@ def main():
     sheen_pastel_blue = (230, 249, 255)
 
     eye_radius = 400
-    pupil_radius = 350
+    pupil_radius = 385
 
     #initialise pygame
     pg.init()
@@ -144,9 +185,9 @@ def main():
         #fill the screen with black
         screen.fill(black)
 
-        #move the eyes
-        left_eye.move(key_up, key_down, key_left, key_right)
-        right_eye.move(key_up, key_down, key_left, key_right)
+        #move the eyes #TODO: This should be eventually replaced by left_eye.update() and right_eye.update() or even better eyes.update()
+        left_eye.bob()
+        right_eye.bob()
 
         #make an expression
         if(key_q):
