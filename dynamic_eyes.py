@@ -1,38 +1,43 @@
 import numpy as np
 import cv2
 import pygame as pg
+from enum import Enum
 
-def create_neon(surf):
-    surf_alpha = surf.convert_alpha()
-    rgb = pg.surfarray.array3d(surf_alpha)
-    alpha = pg.surfarray.array_alpha(surf_alpha).reshape((*rgb.shape[:2], 1))
-    image = np.concatenate((rgb, alpha), 2)
-    cv2.GaussianBlur(image, ksize=(9, 9), sigmaX=10, sigmaY=10, dst=image)
-    cv2.blur(image, ksize=(5, 5), dst=image)
-    bloom_surf = pg.image.frombuffer(image.flatten(), image.shape[1::-1], 'RGBA')
-    return bloom_surf
+class State(Enum):
+    IDLE = 0
+    ACTIVE = 1
+    FINISHED = 2
 
-class circle(pg.sprite.Sprite):
-    def __init__(self, color, centre, radius, velocity=None):
+def glassy_blur(pg_surface):
+    np_image = pg.surfarray.array3d(pg_surface)
+    np_blurred = cv2.GaussianBlur(np_image, ksize=(15, 15), sigmaX=20, sigmaY=20)
+    return pg.surfarray.make_surface(np_blurred)
+
+class Eye(pg.sprite.Sprite):
+    def __init__(self, centre, iris_color, iris_radius, pupil_color=None, pupil_radius = None, left_eye:bool = None, velocity=None):
         #Call the Sprite constructor
         super().__init__()
 
+        self.state = State.IDLE
+
         #centre for initial position -> use move and Rect afterwards
-        self.color = color
-        self.radius = radius
-        self.vel = velocity 
+        self.iris_color = iris_color
+        self.iris_radius = iris_radius
+        self.pupil_color = pupil_color
+        self.pupil_radius = pupil_radius
 
-        #Create an image of the block, fill with white (transparent) and draw circle for eyes
-        white = (255, 255, 255)
-        self.image = pg.Surface((2*radius, 2*radius))
-        self.image.fill(white)
-        self.image.set_colorkey(white)
-        pg.draw.circle(surface=self.image, color=color, center=(radius, radius), radius=radius) 
+        self.vel = velocity
+        self.left_eye = left_eye #0-> right, 1 -> left
+
+        #Initialise the iris
+        self._white = (255, 255, 255)
+        self.image = pg.Surface((2*iris_radius, 2*iris_radius))
+        self.image.set_colorkey(self._white)
+        self._draw_iris()
         
-        #Fetch the rect that has the initial position and dimensions of the surfacess
+        #Fetch the rect that has the initial position and dimensions of the surfaces
         self.rect = self.image.get_rect()
-        self.rect.move_ip(centre[0]-radius, centre[1]-radius)
-
+        self.rect.move_ip(centre[0]-iris_radius, centre[1]-iris_radius)
 
     def move(self, up=False, down=False, left=False, right=False):
         if right:
@@ -43,19 +48,45 @@ class circle(pg.sprite.Sprite):
             self.rect.move_ip(0, self.vel)
         if up:
             self.rect.move_ip(0, -self.vel)
+
+    def _draw_iris(self):
+        self.image.fill(self._white)
+        pg.draw.circle(surface=self.image, color=self.iris_color, center=(self.iris_radius, self.iris_radius), radius=self.iris_radius) 
+
+    def _draw_pupil(self):
+        pg.draw.circle(surface=self.image, color=self.iris_color, center=(self.pupil_radius, self.pupil_radius), radius=self.pupil_radius)
+
+    def neutral(self):
+        self._draw_iris()
+
+    def bored(self):
+        self._draw_iris()
+        eyelid_rect = pg.Rect(0, 0, 2 * self.iris_radius, self.iris_radius) 
+        pg.draw.rect(surface=self.image, color=self._white, rect=eyelid_rect)
+
+    def angry(self):
+        self._draw_iris()
+
+        if (self.left_eye):
+            pg.draw.polygon(surface=self.image, color=self._white, points=[(0,0), (2*self.iris_radius, 0), (2*self.iris_radius, 0.5*self.iris_radius), (0, self.iris_radius)])
+        else:
+            pg.draw.polygon(surface=self.image, color=self._white, points=[(0,0), (2*self.iris_radius, 0), (2*self.iris_radius, self.iris_radius), (0, 0.5*self.iris_radius)])
     
-    def move_iris():
-        pass
+    def sad(self):
+        self._draw_iris()
 
-
-
+        if (self.left_eye):
+            pg.draw.polygon(surface=self.image, color=self._white, points=[(0,0), (2*self.iris_radius, 0), (2*self.iris_radius, self.iris_radius), (0, 0.5*self.iris_radius)])
+        else:
+            pg.draw.polygon(surface=self.image, color=self._white, points=[(0,0), (2*self.iris_radius, 0), (2*self.iris_radius, 0.5*self.iris_radius), (0, self.iris_radius)])
 
 def main():
     #TUNE
     black = (0,0,0)
-    pastel_blue = (171,235,255)
+    pastel_blue = (171, 235, 255)
+    light_pastel_blue = (196, 233, 245)
     sheen_pastel_blue = (230, 249, 255)
-    eye_radius = 240
+    eye_radius = 400
 
     #initialise pygame
     pg.init()
@@ -67,17 +98,21 @@ def main():
     clock = pg.time.Clock()
 
     #Instantiate the eye sprites
-    right_eye = circle(color=pastel_blue, centre=(480, 540), radius=eye_radius, velocity=8)
-    left_eye = circle(color=pastel_blue, centre=(1440, 540), radius=eye_radius, velocity=8)
+    right_eye = Eye(centre=(480, 540), iris_color=pastel_blue, iris_radius=eye_radius, pupil_color=light_pastel_blue, velocity=8)
+    left_eye = Eye(centre=(1440, 540), iris_color=pastel_blue, iris_radius=eye_radius,  pupil_color=light_pastel_blue, velocity=8, left_eye=True)
 
     #game loop
     while True:
         #input loop
         keys = pg.key.get_pressed()
-        up = keys[pg.K_UP]
-        down = keys[pg.K_DOWN]
-        right = keys[pg.K_RIGHT]
-        left = keys[pg.K_LEFT]
+        key_up = keys[pg.K_UP]
+        key_down = keys[pg.K_DOWN]
+        key_right = keys[pg.K_RIGHT]
+        key_left = keys[pg.K_LEFT]
+        key_q = keys[pg.K_q]
+        key_w = keys[pg.K_w]
+        key_e = keys[pg.K_e]
+        key_r = keys[pg.K_r]
 
         # event loop
         for event in pg.event.get():
@@ -92,19 +127,34 @@ def main():
         screen.fill(black)
 
         #move the eyes
-        left_eye.move(up, down, left, right)
-        right_eye.move(up, down, left, right)
+        left_eye.move(key_up, key_down, key_left, key_right)
+        right_eye.move(key_up, key_down, key_left, key_right)
+
+        #make an expression
+        if(key_q):
+            left_eye.neutral()
+            right_eye.neutral()
+        elif(key_w):
+            left_eye.bored()
+            right_eye.bored()
+        elif(key_e):
+            left_eye.sad()
+            right_eye.sad()
+        elif(key_r):
+            left_eye.angry()
+            right_eye.angry()
         
         #blit the sprites onto the screen
         screen.blit(left_eye.image, left_eye.rect)
         screen.blit(right_eye.image, right_eye.rect)
 
         #!Apply any post-processing to the entire display here:
+        blurred_screen = glassy_blur(screen)
+        screen.blit(blurred_screen, blurred_screen.get_rect(center = screen.get_rect().center), special_flags = pg.BLEND_PREMULTIPLIED)
 
         pg.display.update()
 
-        #set the frame rate to 60fps
-        clock.tick(60) 
+        #set the frame rate to 60fps 
 
 if __name__ == "__main__":
     main()
