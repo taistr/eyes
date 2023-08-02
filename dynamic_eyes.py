@@ -34,6 +34,7 @@ class Eye(pg.sprite.Sprite):
         self.image = pg.Surface((2*iris_radius, 2*iris_radius))
         self.image.set_colorkey(self._white)
         self._draw_iris()
+        self._draw_pupil()
         
         #Fetch the rect that has the initial position and dimensions of the surfaces
         self.rect = self.image.get_rect()
@@ -54,18 +55,21 @@ class Eye(pg.sprite.Sprite):
         pg.draw.circle(surface=self.image, color=self.iris_color, center=(self.iris_radius, self.iris_radius), radius=self.iris_radius) 
 
     def _draw_pupil(self):
-        pg.draw.circle(surface=self.image, color=self.iris_color, center=(self.pupil_radius, self.pupil_radius), radius=self.pupil_radius)
+        pg.draw.circle(surface=self.image, color=self.pupil_color, center=(self.iris_radius, self.iris_radius), radius=self.pupil_radius)
 
     def neutral(self):
         self._draw_iris()
+        self._draw_pupil()
 
     def bored(self):
         self._draw_iris()
+        self._draw_pupil()
         eyelid_rect = pg.Rect(0, 0, 2 * self.iris_radius, self.iris_radius) 
         pg.draw.rect(surface=self.image, color=self._white, rect=eyelid_rect)
 
     def angry(self):
         self._draw_iris()
+        self._draw_pupil()
 
         if (self.left_eye):
             pg.draw.polygon(surface=self.image, color=self._white, points=[(0,0), (2*self.iris_radius, 0), (2*self.iris_radius, 0.5*self.iris_radius), (0, self.iris_radius)])
@@ -74,6 +78,7 @@ class Eye(pg.sprite.Sprite):
     
     def sad(self):
         self._draw_iris()
+        self._draw_pupil()
 
         if (self.left_eye):
             pg.draw.polygon(surface=self.image, color=self._white, points=[(0,0), (2*self.iris_radius, 0), (2*self.iris_radius, self.iris_radius), (0, 0.5*self.iris_radius)])
@@ -86,7 +91,9 @@ def main():
     pastel_blue = (171, 235, 255)
     light_pastel_blue = (196, 233, 245)
     sheen_pastel_blue = (230, 249, 255)
+
     eye_radius = 400
+    pupil_radius = 350
 
     #initialise pygame
     pg.init()
@@ -98,8 +105,19 @@ def main():
     clock = pg.time.Clock()
 
     #Instantiate the eye sprites
-    right_eye = Eye(centre=(480, 540), iris_color=pastel_blue, iris_radius=eye_radius, pupil_color=light_pastel_blue, velocity=8)
-    left_eye = Eye(centre=(1440, 540), iris_color=pastel_blue, iris_radius=eye_radius,  pupil_color=light_pastel_blue, velocity=8, left_eye=True)
+    right_eye = Eye(centre=(480, 540), 
+                    iris_color=pastel_blue, 
+                    iris_radius=eye_radius, 
+                    pupil_color=sheen_pastel_blue, 
+                    pupil_radius=pupil_radius,
+                    velocity=8)
+    left_eye = Eye(centre=(1440, 540), 
+                   iris_color=pastel_blue, 
+                   iris_radius=eye_radius,  
+                   pupil_color=sheen_pastel_blue,
+                   pupil_radius=pupil_radius,
+                   velocity=8, 
+                   left_eye=True)
 
     #game loop
     while True:
