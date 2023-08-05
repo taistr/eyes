@@ -15,13 +15,22 @@ class Expression(Enum):
     ANGRY = 2
     BORED = 3
 
+class Mien(Enum):
+    OPEN = 0
+    CLOSED = 1
+    CLOSED_SMILE = 2
+    OPEN_SMILE = 3
+    CLOSED_SAD = 3
+    OPEN_SAD = 4
+
+
 def glassy_blur(pg_surface):
     np_image = pg.surfarray.array3d(pg_surface)
     np_blurred = cv2.GaussianBlur(np_image, ksize=(33, 33), sigmaX=20, sigmaY=20)
     return pg.surfarray.make_surface(np_blurred)
 
 class Eye(pg.sprite.Sprite):
-    def __init__(self, centre, iris_color, iris_radius, pupil_color=None, pupil_radius = None, left_eye:bool = None, velocity=None):
+    def __init__(self, centre, iris_color, iris_radius, pupil_color=(0,0,0), pupil_radius = 0, left_eye:bool = False, velocity=0):
         #Call the Sprite constructor
         super().__init__()
 
@@ -33,6 +42,7 @@ class Eye(pg.sprite.Sprite):
         #centre for initial position -> use move and Rect afterwards
         self.iris_color = iris_color
         self.iris_radius = iris_radius
+
         self.pupil_color = pupil_color
         self.pupil_radius = pupil_radius
 
@@ -66,7 +76,7 @@ class Eye(pg.sprite.Sprite):
 
         #Update expression
         if self.state == State.IDLE:
-            #TODO: For integration, replace this with a message from 'brain' or equivalent
+            #TODO: For integration, replace this with a message from 'brain' or equivalent 
             #If key pressed, transition to active state and specify which expression to run
             if(keys[pg.K_q]):
                 self.expression = Expression.NEUTRAL
@@ -185,6 +195,95 @@ class Eye(pg.sprite.Sprite):
             return True
 
         return False
+    
+class Mouth(pg.sprite.Sprite):
+    def __init__(self, centre, color, radius, velocity = 0):
+        self.state = State.IDLE
+        self.mien = Mien.OPEN
+
+        self.centre = centre
+        self.color = color
+        self.radius = radius
+        self.movement_velocity = velocity
+
+        self._white = (255, 255, 255)
+        self.image = pg.Surface((2*radius, 2*radius))
+        self.image.set_colorkey(self._white)
+        self.open()
+
+        #Fetch the rect that has the initial position and dimensions of the surfaces
+        self.rect = self.image.get_rect()
+        self.rect.move_ip(centre[0]-radius, centre[1]-radius)
+    
+    def update(self):
+        keys = pg.key.get_pressed()
+
+        #Update mien
+        if self.state == State.IDLE:
+            #TODO: For integration, replace this with a message from 'brain' or equivalent 
+            #If key pressed, transition to active state and specify which mien to show on mouth
+            if(keys[pg.K_t]):
+                self.expression = Mien.CLOSED
+                self.state = State.ACTIVE
+            elif(keys[pg.K_y]):
+                self.expression = Mien.CLOSED_SMILE
+                self.state = State.ACTIVE
+            elif(keys[pg.K_u]):
+                self.expression = Mien.CLOSED_SAD
+                self.state = State.ACTIVE
+            elif(keys[pg.K_i]):
+                self.expression = Mien.OPEN
+                self.state = State.ACTIVE
+            elif(keys[pg.K_o]):
+                self.expression = Mien.OPEN_SMILE
+                self.state = State.ACTIVE
+            elif(keys[pg.K_p]):
+                self.expression = Mien.OPEN_SAD
+                self.state = State.ACTIVE
+            
+        elif self.state == State.ACTIVE:
+            #run an iteration of whichever expression is active
+            status = False
+
+            match self.expression:
+                case Mien.CLOSED:
+                    status = self.close()
+                case Mien.CLOSED_SMILE:
+                    pass
+                case Mien.CLOSED_SAD:
+                    pass
+                case Mien.OPEN:
+                    status = self.open()
+                case Mien.OPEN_SMILE:
+                    status = self.open_smile()
+                case Mien.OPEN_SAD:
+                    pass
+
+            if (status):
+                self.state = State.FINISHED
+
+        elif self.state == State.FINISHED:
+            #clean up and transition to idle
+            self.state = State.IDLE
+    
+    def open(self):
+        self.image.fill(self._white)
+        pg.draw.circle(surface=self.image, color=self.color, center=(self.radius, self.radius), radius=self.radius) 
+
+        return True
+
+    def open_smile(self):
+        self.open()
+        top_lip_rect = pg.Rect(0, 0, 2 * self.radius, self.radius) 
+        pg.draw.rect(surface=self.image, color=self._white, rect=top_lip_rect)
+
+        return True
+    
+    def close(self):
+        self.image.fill(self._white)
+        pg.draw.line(surface=self.image, color=self.color, start_pos=(0, self.radius), end_pos=(2*self.radius, self.radius), width=40)
+
+        return True
 
 def main():
     #TUNE
@@ -193,8 +292,9 @@ def main():
     light_pastel_blue = (196, 233, 245)
     sheen_pastel_blue = (230, 249, 255)
 
-    eye_radius = 400
-    pupil_radius = 385
+    eye_radius = 350
+    pupil_radius = int(0.9625 * eye_radius)
+    mouth_radius = 100
 
     #initialise pygame
     pg.init()
@@ -219,6 +319,9 @@ def main():
                    pupil_radius=pupil_radius,
                    velocity=8, 
                    left_eye=True)
+    mouth = Mouth(centre=(960, 810),
+                  color=sheen_pastel_blue,
+                  radius=mouth_radius)
 
     #game loop
     while True:
@@ -236,10 +339,12 @@ def main():
 
         left_eye.update()
         right_eye.update()
+        mouth.update()
         
         #blit the sprites onto the screen
         screen.blit(left_eye.image, left_eye.rect)
         screen.blit(right_eye.image, right_eye.rect)
+        screen.blit(mouth.image, mouth.rect)
 
         #!Apply any post-processing to the entire display here:
         blurred_screen = glassy_blur(screen)
