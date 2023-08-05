@@ -9,22 +9,16 @@ class State(Enum):
     ACTIVE = 1
     FINISHED = 2
 
+class Expression(Enum):
+    NEUTRAL = 0
+    SAD = 1
+    ANGRY = 2
+    BORED = 3
+
 def glassy_blur(pg_surface):
     np_image = pg.surfarray.array3d(pg_surface)
     np_blurred = cv2.GaussianBlur(np_image, ksize=(15, 15), sigmaX=20, sigmaY=20)
     return pg.surfarray.make_surface(np_blurred)
-
-# def led_striped(pg_surface):
-#     np_image = pg.surfarray.array3d(pg_surface)
-
-#     height, width, _ = np_image.shape
-#     stripe_color = (0, 0, 0)  # BGR color of the stripe (blue in this example)
-#     stripe_height = 20  # Height of the stripe in pixels
-#     stripe_image = np.zeros((height, width, 3), dtype=np.uint8)
-#     stripe_image[::stripe_height, :] = stripe_color
-#     np_striped = cv2.addWeighted(np_image, 1, stripe_image, 0.5, 0)
-    
-#     return pg.surfarray.make_surface(np_striped)
 
 class Eye(pg.sprite.Sprite):
     def __init__(self, centre, iris_color, iris_radius, pupil_color=None, pupil_radius = None, left_eye:bool = None, velocity=None):
@@ -32,6 +26,7 @@ class Eye(pg.sprite.Sprite):
         super().__init__()
 
         self.state = State.IDLE
+        self.expression = Expression.NEUTRAL
         self.initial_position = centre
 
         #centre for initial position -> use move and Rect afterwards
@@ -62,10 +57,40 @@ class Eye(pg.sprite.Sprite):
 
     def update(self): #On each iteration update the eye's current state - when added to a pygame group, it can be invoked via group.update() -> for both eyes
         if self.state == State.IDLE:
-            self.bob()
+            #Run the bob animation
+            #self.bob()
+
+            #Get keys pressed
+            keys = pg.key.get_pressed()
+
+            #TODO: For integration, replace this with a message from 'brain' or equivalent
+
+            #If key pressed, transition to active state and specify which expression to run
+            if(keys[pg.K_q]):
+                self.expression = Expression.NEUTRAL
+                self.state = State.ACTIVE
+            elif(keys[pg.K_w]):
+                self.expression = Expression.ANGRY
+                self.state = State.ACTIVE
+            elif(keys[pg.K_e]):
+                self.expression = Expression.BORED
+                self.state = State.ACTIVE
+            elif(keys[pg.K_r]):
+                self.expression = Expression.SAD
+                self.state = State.ACTIVE
+
         elif self.state == State.ACTIVE:
-            #run an iteration of whatever expression is active
-            pass 
+            #run an iteration of whichever expression is active
+            match self.expression:
+                case Expression.NEUTRAL:
+                    pass
+                case Expression.ANGRY:
+                    pass
+                case Expression.NEUTRAL:
+                    pass
+                case Expression.NEUTRAL:
+                    pass
+
         elif self.state == State.FINISHED:
             #clean or finish anything up and transition to idle
             pass
@@ -79,6 +104,10 @@ class Eye(pg.sprite.Sprite):
             self.rect.move_ip(0, self.movement_velocity)
         if up:
             self.rect.move_ip(0, -self.movement_velocity)
+    
+    #This is a stylistic choice
+    def flicker(self):
+        self.rect.move_ip(round(random.uniform(-1, 1)), random.uniform(-1, 1))
 
     def bob(self):
         if self._idle_up_flag:
@@ -87,6 +116,8 @@ class Eye(pg.sprite.Sprite):
         else:
             self.rect.move_ip(0, self.idle_velocity) #move down
             self._idle_incr -= 1
+        
+        self.rect.move_ip(round(random.uniform(-1, 1)), 0)
     
         if abs(self._idle_incr) >= self._idle_max_position:
             self._idle_up_flag = not(self._idle_up_flag)
