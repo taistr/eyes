@@ -17,7 +17,7 @@ class Expression(Enum):
 
 def glassy_blur(pg_surface):
     np_image = pg.surfarray.array3d(pg_surface)
-    np_blurred = cv2.GaussianBlur(np_image, ksize=(15, 15), sigmaX=20, sigmaY=20)
+    np_blurred = cv2.GaussianBlur(np_image, ksize=(33, 33), sigmaX=20, sigmaY=20)
     return pg.surfarray.make_surface(np_blurred)
 
 class Eye(pg.sprite.Sprite):
@@ -27,6 +27,7 @@ class Eye(pg.sprite.Sprite):
 
         self.state = State.IDLE
         self.expression = Expression.NEUTRAL
+
         self.initial_position = centre
 
         #centre for initial position -> use move and Rect afterwards
@@ -39,6 +40,8 @@ class Eye(pg.sprite.Sprite):
         self._idle_incr = 0
         self._idle_up_flag = True
         self._idle_max_position = 20
+
+        self._expression_incr = 0
 
         self.movement_velocity = velocity
 
@@ -56,15 +59,14 @@ class Eye(pg.sprite.Sprite):
         self.rect.move_ip(centre[0]-iris_radius, centre[1]-iris_radius)
 
     def update(self): #On each iteration update the eye's current state - when added to a pygame group, it can be invoked via group.update() -> for both eyes
+        keys = pg.key.get_pressed()
+
+        #Update position
+        self.move(keys)
+
+        #Update expression
         if self.state == State.IDLE:
-            #Run the bob animation
-            #self.bob()
-
-            #Get keys pressed
-            keys = pg.key.get_pressed()
-
             #TODO: For integration, replace this with a message from 'brain' or equivalent
-
             #If key pressed, transition to active state and specify which expression to run
             if(keys[pg.K_q]):
                 self.expression = Expression.NEUTRAL
@@ -78,49 +80,42 @@ class Eye(pg.sprite.Sprite):
             elif(keys[pg.K_r]):
                 self.expression = Expression.SAD
                 self.state = State.ACTIVE
+            
+            self.flicker()
 
         elif self.state == State.ACTIVE:
             #run an iteration of whichever expression is active
             match self.expression:
                 case Expression.NEUTRAL:
-                    pass
+                    status = self.neutral()
                 case Expression.ANGRY:
-                    pass
-                case Expression.NEUTRAL:
-                    pass
-                case Expression.NEUTRAL:
-                    pass
+                    status = self.angry()
+                case Expression.BORED:
+                    status = self.bored()
+                case Expression.SAD:
+                    status = self.sad()
+            
+            if (status):
+                self.state = State.FINISHED
 
         elif self.state == State.FINISHED:
-            #clean or finish anything up and transition to idle
-            pass
+            #clean up and transition to idle
+            self._expression_incr = 0
+            self.state = State.IDLE
 
-    def move(self, up=False, down=False, left=False, right=False):
-        if right:
+    def move(self, keys):
+        if keys[pg.K_RIGHT]:
             self.rect.move_ip(self.movement_velocity, 0)
-        if left:
+        if keys[pg.K_LEFT]:
             self.rect.move_ip(-self.movement_velocity, 0)
-        if down:
+        if keys[pg.K_DOWN]:
             self.rect.move_ip(0, self.movement_velocity)
-        if up:
+        if keys[pg.K_UP]:
             self.rect.move_ip(0, -self.movement_velocity)
     
-    #This is a stylistic choice
+    #This is purely stylistic
     def flicker(self):
         self.rect.move_ip(round(random.uniform(-1, 1)), random.uniform(-1, 1))
-
-    def bob(self):
-        if self._idle_up_flag:
-            self.rect.move_ip(0, -self.idle_velocity) #move up
-            self._idle_incr += 1
-        else:
-            self.rect.move_ip(0, self.idle_velocity) #move down
-            self._idle_incr -= 1
-        
-        self.rect.move_ip(round(random.uniform(-1, 1)), 0)
-    
-        if abs(self._idle_incr) >= self._idle_max_position:
-            self._idle_up_flag = not(self._idle_up_flag)
 
     def _draw_iris(self):
         self.image.fill(self._white)
@@ -133,29 +128,63 @@ class Eye(pg.sprite.Sprite):
         self._draw_iris()
         self._draw_pupil()
 
+        return True
+
     def bored(self):
+        #start from neutral
         self._draw_iris()
         self._draw_pupil()
-        eyelid_rect = pg.Rect(0, 0, 2 * self.iris_radius, self.iris_radius) 
+
+        #increment counter
+        self._expression_incr += 100
+
+        #generate and draw the eyelid
+        eyelid_rect = pg.Rect(0, 0, 2 * self.iris_radius, self._expression_incr) 
         pg.draw.rect(surface=self.image, color=self._white, rect=eyelid_rect)
 
+        #return false if not end of animation
+        if self._expression_incr >= self.iris_radius:
+            return True
+        
+        return False
+        
     def angry(self):
+        #start from neutral
         self._draw_iris()
         self._draw_pupil()
 
+        #increment counter
+        self._expression_incr += 100
+
+        #draw eyelid
         if (self.left_eye):
-            pg.draw.polygon(surface=self.image, color=self._white, points=[(0,0), (2*self.iris_radius, 0), (2*self.iris_radius, 0.5*self.iris_radius), (0, self.iris_radius)])
+            pg.draw.polygon(surface=self.image, color=self._white, points=[(0,0), (2*self.iris_radius, 0), (2*self.iris_radius, self._expression_incr-0.5*self.iris_radius), (0, self._expression_incr)])
         else:
-            pg.draw.polygon(surface=self.image, color=self._white, points=[(0,0), (2*self.iris_radius, 0), (2*self.iris_radius, self.iris_radius), (0, 0.5*self.iris_radius)])
+            pg.draw.polygon(surface=self.image, color=self._white, points=[(0,0), (2*self.iris_radius, 0), (2*self.iris_radius, self._expression_incr), (0, self._expression_incr-0.5*self.iris_radius)])
     
+        #return false if not end of animation
+        if self._expression_incr >= self.iris_radius:
+            return True
+
+        return False
+
     def sad(self):
         self._draw_iris()
         self._draw_pupil()
 
+        #increment counter
+        self._expression_incr += 100
+
         if (self.left_eye):
-            pg.draw.polygon(surface=self.image, color=self._white, points=[(0,0), (2*self.iris_radius, 0), (2*self.iris_radius, self.iris_radius), (0, 0.5*self.iris_radius)])
+            pg.draw.polygon(surface=self.image, color=self._white, points=[(0,0), (2*self.iris_radius, 0), (2*self.iris_radius, self._expression_incr), (0, self._expression_incr-0.5*self.iris_radius)])
         else:
-            pg.draw.polygon(surface=self.image, color=self._white, points=[(0,0), (2*self.iris_radius, 0), (2*self.iris_radius, 0.5*self.iris_radius), (0, self.iris_radius)])
+            pg.draw.polygon(surface=self.image, color=self._white, points=[(0,0), (2*self.iris_radius, 0), (2*self.iris_radius, self._expression_incr-0.5*self.iris_radius), (0, self._expression_incr)])
+
+        #return false if not end of animation
+        if self._expression_incr >= self.iris_radius:
+            return True
+
+        return False
 
 def main():
     #TUNE
@@ -171,7 +200,7 @@ def main():
     pg.init()
 
     #Create a fullscreen display surface
-    screen = pg.display.set_mode(flags=pg.FULLSCREEN)
+    screen = pg.display.set_mode(flags=pg.FULLSCREEN, vsync=1)
 
     #Create a pygame clock
     clock = pg.time.Clock()
@@ -193,17 +222,6 @@ def main():
 
     #game loop
     while True:
-        #input loop
-        keys = pg.key.get_pressed()
-        key_up = keys[pg.K_UP]
-        key_down = keys[pg.K_DOWN]
-        key_right = keys[pg.K_RIGHT]
-        key_left = keys[pg.K_LEFT]
-        key_q = keys[pg.K_q]
-        key_w = keys[pg.K_w]
-        key_e = keys[pg.K_e]
-        key_r = keys[pg.K_r]
-
         # event loop
         for event in pg.event.get():
             # check if a user wants to exit the game or not
@@ -216,23 +234,8 @@ def main():
         #fill the screen with black
         screen.fill(black)
 
-        #move the eyes #TODO: This should be eventually replaced by left_eye.update() and right_eye.update() or even better eyes.update()
-        left_eye.bob()
-        right_eye.bob()
-
-        #make an expression
-        if(key_q):
-            left_eye.neutral()
-            right_eye.neutral()
-        elif(key_w):
-            left_eye.bored()
-            right_eye.bored()
-        elif(key_e):
-            left_eye.sad()
-            right_eye.sad()
-        elif(key_r):
-            left_eye.angry()
-            right_eye.angry()
+        left_eye.update()
+        right_eye.update()
         
         #blit the sprites onto the screen
         screen.blit(left_eye.image, left_eye.rect)
